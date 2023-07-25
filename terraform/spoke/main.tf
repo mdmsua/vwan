@@ -42,4 +42,8 @@ resource "helm_release" "cilium" {
     name  = "nodeinit.enabled"
     value = "true"
   }
+
+  depends_on = [
+    module.cluster
+  ]
 }

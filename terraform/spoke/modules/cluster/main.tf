@@ -66,7 +66,7 @@ resource "azurerm_kubernetes_cluster" "mega" {
   resource_group_name               = data.azurerm_resource_group.mega.name
   location                          = data.azurerm_resource_group.mega.location
   dns_prefix                        = terraform.workspace
-  kubernetes_version                = "1.27.1"
+  kubernetes_version                = "1.26.3"
   local_account_disabled            = true
   node_os_channel_upgrade           = "None"
   node_resource_group               = "${data.azurerm_resource_group.mega.name}-cluster"
@@ -107,6 +107,8 @@ resource "azurerm_kubernetes_cluster" "mega" {
   network_profile {
     network_plugin = "none"
     outbound_type  = "userAssignedNATGateway"
+    service_cidr   = local.service_cidr
+    dns_service_ip = cidrhost(local.service_cidr, 10)
   }
 
   depends_on = [azurerm_role_assignment.cluster_network_contributor]
