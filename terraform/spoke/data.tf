@@ -16,3 +16,12 @@ data "azurerm_virtual_hub" "mega" {
   name                = data.terraform_remote_state.hub.outputs.hub_name
   resource_group_name = data.terraform_remote_state.hub.outputs.hub_resource_group_name
 }
+
+data "http" "gateway_api_crd" {
+  for_each = local.gateway_api_crds
+  url      = "https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/${var.gateway_api_version}/config/crd/${each.value}"
+
+  request_headers = {
+    Accept = "text/plain"
+  }
+}

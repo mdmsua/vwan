@@ -111,7 +111,15 @@ resource "azurerm_kubernetes_cluster" "mega" {
     dns_service_ip = cidrhost(local.service_cidr, 10)
   }
 
-  depends_on = [azurerm_role_assignment.cluster_network_contributor]
+  depends_on = [
+    azurerm_role_assignment.cluster_network_contributor
+  ]
+
+  lifecycle {
+    ignore_changes = [
+      microsoft_defender
+    ]
+  }
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "workload" {

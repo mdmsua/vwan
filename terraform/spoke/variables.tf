@@ -42,3 +42,13 @@ variable "hub_tenant_id" {
 variable "hub_subscription_id" {
   type = string
 }
+
+variable "cilium_version" {
+  type    = string
+  default = "v1.14"
+}
+
+variable "gateway_api_version" {
+  type    = string
+  default = "v0.7.0"
+}

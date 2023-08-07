@@ -19,11 +19,11 @@ op run --env-file .env -- terraform plan -out main.tfplan
 ```
 ### Hub
 ```sh
-terraform workspace select weu|nar
-op run --env-file .env --env-file ../.env -- terraform plan -out main.tfplan -var-file tfvars/(weu|nar).tfvars
+terraform workspace select westeurope
+op run --env-file .env --env-file ../.env -- terraform plan -out main.tfplan -var-file tfvars/westeurope.tfvars
 ```
 ### Spoke
 ```sh
-terraform workspace select weu-beta
-op run --env-file .env --env-file ../.env -- terraform plan -out main.tfplan -var-file tfvars/weu-beta.tfvars
+terraform workspace select westeurope-berlin
+op run --env-file .env --env-file ../.env -- terraform plan -out main.tfplan -var-file tfvars/westeurope/berlin.tfvars
 ```

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-terraform init \
+terraform init -upgrade \
     -backend-config="tenant_id=$TF_VAR_state_tenant_id" \
     -backend-config="subscription_id=$TF_VAR_state_subscription_id" \
     -backend-config="resource_group_name=$TF_VAR_state_resource_group_name" \

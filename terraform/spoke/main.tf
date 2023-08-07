@@ -22,6 +22,15 @@ module "cluster" {
   source               = "./modules/cluster"
   resource_group_name  = azurerm_resource_group.mega.name
   virtual_network_name = azurerm_virtual_network.mega.name
+
+  depends_on = [
+    azurerm_resource_group.mega
+  ]
+}
+
+resource "kubernetes_manifest" "gateway_api_crd" {
+  for_each = local.gateway_api_crds
+  manifest = { for key, value in yamldecode(data.http.gateway_api_crd[each.key].response_body) : key => value if key != "status" }
 }
 
 resource "helm_release" "cilium" {
@@ -32,6 +41,8 @@ resource "helm_release" "cilium" {
   create_namespace = false
   atomic           = true
   cleanup_on_fail  = true
+  reuse_values     = true
+  version          = var.cilium_version
 
   set {
     name  = "aksbyocni.enabled"
@@ -43,7 +54,54 @@ resource "helm_release" "cilium" {
     value = "true"
   }
 
+  set {
+    name  = "envoy.enabled"
+    value = "true"
+  }
+
+  set {
+    name  = "gatewayAPI.enabled"
+    value = "true"
+  }
+
+  set {
+    name  = "encryption.enabled"
+    value = "true"
+  }
+
+  set {
+    name  = "encryption.type"
+    value = "wireguard"
+  }
+
+  set {
+    name  = "encryption.nodeEncryption"
+    value = "true"
+  }
+
+  set {
+    name  = "encryption.nodeEncryption"
+    value = "true"
+  }
+
+  set {
+    name  = "ingressController.enabled"
+    value = "true"
+  }
+
+  set {
+    name  = "kubeProxyReplacement"
+    value = "strict"
+  }
+
+  set {
+    name  = "authentication.mutual.spire.enabled"
+    value = "false"
+  }
+
   depends_on = [
-    module.cluster
+    module.cluster,
+    kubernetes_manifest.gateway_api_crd
   ]
 }
+
