@@ -2,7 +2,10 @@ resource "azurerm_subnet" "cluster_api" {
   name                 = "${data.azurerm_virtual_network.mega.name}-subnet-cluster-api"
   resource_group_name  = data.azurerm_resource_group.mega.name
   virtual_network_name = data.azurerm_virtual_network.mega.name
-  address_prefixes     = [cidrsubnet(data.azurerm_virtual_network.mega.address_space.0, 2, 0)]
+  address_prefixes = [
+    cidrsubnet(data.azurerm_virtual_network.mega.address_space.0, 8, 0),
+    cidrsubnet(data.azurerm_virtual_network.mega.address_space.1, 4, 0)
+  ]
 
   delegation {
     name = "managedClusters"
@@ -16,37 +19,68 @@ resource "azurerm_subnet" "cluster_api" {
   }
 }
 
-resource "azurerm_subnet" "cluster_nodes" {
-  name                 = "${data.azurerm_virtual_network.mega.name}-subnet-cluster-nodes"
+resource "azurerm_subnet" "cluster_nodes_agent" {
+  name                 = "${data.azurerm_virtual_network.mega.name}-subnet-cluster-nodes-agent"
   resource_group_name  = data.azurerm_resource_group.mega.name
   virtual_network_name = data.azurerm_virtual_network.mega.name
-  address_prefixes     = [cidrsubnet(data.azurerm_virtual_network.mega.address_space.0, 2, 1)]
+  address_prefixes = [
+    cidrsubnet(data.azurerm_virtual_network.mega.address_space.0, 8, 1),
+    cidrsubnet(data.azurerm_virtual_network.mega.address_space.1, 4, 1)
+  ]
 }
 
-resource "azurerm_public_ip_prefix" "cluster" {
-  name                = "${data.azurerm_resource_group.mega.name}-nat-gateway-ip-prefix"
+resource "azurerm_subnet" "cluster_nodes_workload" {
+  for_each             = toset(local.zones)
+  name                 = "${data.azurerm_virtual_network.mega.name}-subnet-cluster-nodes-workload-zone-${each.key}"
+  resource_group_name  = data.azurerm_resource_group.mega.name
+  virtual_network_name = data.azurerm_virtual_network.mega.name
+  address_prefixes = [
+    cidrsubnet(data.azurerm_virtual_network.mega.address_space.0, 8, 2 + index(tolist(local.zones), each.key)),
+    cidrsubnet(data.azurerm_virtual_network.mega.address_space.1, 4, 2 + index(tolist(local.zones), each.key))
+  ]
+}
+
+resource "azurerm_public_ip_prefix" "nat_gateway" {
+  for_each            = toset(local.zones)
+  name                = "${data.azurerm_resource_group.mega.name}-nat-gateway-ip-prefix-zone-${each.key}"
   resource_group_name = data.azurerm_resource_group.mega.name
   location            = data.azurerm_resource_group.mega.location
   prefix_length       = 28
-  zones               = ["1", "2", "3"]
+  zones               = [each.key]
   sku                 = "Standard"
+  ip_version          = "IPv4"
+}
+
+resource "azurerm_public_ip_prefix" "load_balancer" {
+  for_each            = local.ip_versions
+  name                = "${data.azurerm_resource_group.mega.name}-load-balancer-ip-prefix-${trimprefix(each.key, "IP")}"
+  resource_group_name = data.azurerm_resource_group.mega.name
+  location            = data.azurerm_resource_group.mega.location
+  prefix_length       = each.value
+  zones               = local.zones
+  sku                 = "Standard"
+  ip_version          = each.key
 }
 
 resource "azurerm_nat_gateway" "cluster" {
-  name                    = "${data.azurerm_resource_group.mega.name}-nat-gateway"
+  for_each                = toset(local.zones)
+  name                    = "${data.azurerm_resource_group.mega.name}-nat-gateway-zone-${each.key}"
   resource_group_name     = data.azurerm_resource_group.mega.name
   location                = data.azurerm_resource_group.mega.location
   idle_timeout_in_minutes = 30
+  zones                   = [each.key]
 }
 
 resource "azurerm_nat_gateway_public_ip_prefix_association" "cluster" {
-  nat_gateway_id      = azurerm_nat_gateway.cluster.id
-  public_ip_prefix_id = azurerm_public_ip_prefix.cluster.id
+  for_each            = toset(local.zones)
+  nat_gateway_id      = azurerm_nat_gateway.cluster[each.key].id
+  public_ip_prefix_id = azurerm_public_ip_prefix.nat_gateway[each.key].id
 }
 
 resource "azurerm_subnet_nat_gateway_association" "cluster" {
-  subnet_id      = azurerm_subnet.cluster_nodes.id
-  nat_gateway_id = azurerm_nat_gateway.cluster.id
+  for_each       = toset(local.zones)
+  subnet_id      = azurerm_subnet.cluster_nodes_workload[each.key].id
+  nat_gateway_id = azurerm_nat_gateway.cluster[each.key].id
 }
 
 resource "azurerm_user_assigned_identity" "cluster" {
@@ -66,7 +100,7 @@ resource "azurerm_kubernetes_cluster" "mega" {
   resource_group_name               = data.azurerm_resource_group.mega.name
   location                          = data.azurerm_resource_group.mega.location
   dns_prefix                        = terraform.workspace
-  kubernetes_version                = "1.26.3"
+  kubernetes_version                = var.kubernetes_version
   local_account_disabled            = true
   node_os_channel_upgrade           = "None"
   node_resource_group               = "${data.azurerm_resource_group.mega.name}-cluster"
@@ -100,15 +134,19 @@ resource "azurerm_kubernetes_cluster" "mega" {
     only_critical_addons_enabled = true
     os_disk_size_gb              = 32
     vm_size                      = "Standard_D8s_v5"
-    vnet_subnet_id               = azurerm_subnet.cluster_nodes.id
-    zones                        = ["1", "2", "3"]
+    vnet_subnet_id               = azurerm_subnet.cluster_nodes_agent.id
+    zones                        = local.zones
   }
 
   network_profile {
-    network_plugin = "none"
-    outbound_type  = "userAssignedNATGateway"
-    service_cidr   = local.service_cidr
-    dns_service_ip = cidrhost(local.service_cidr, 10)
+    network_plugin    = "none"
+    ip_versions       = ["IPv4", "IPv6"]
+    load_balancer_sku = "standard"
+
+    load_balancer_profile {
+      idle_timeout_in_minutes = 4
+      outbound_ip_prefix_ids  = [for key, value in local.ip_versions : azurerm_public_ip_prefix.load_balancer[key].id]
+    }
   }
 
   depends_on = [
@@ -123,7 +161,8 @@ resource "azurerm_kubernetes_cluster" "mega" {
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "workload" {
-  name                  = "workload"
+  for_each              = toset(local.zones)
+  name                  = "workload${each.key}"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.mega.id
   enable_auto_scaling   = true
   min_count             = 0
@@ -131,6 +170,6 @@ resource "azurerm_kubernetes_cluster_node_pool" "workload" {
   max_pods              = 40
   os_disk_size_gb       = 64
   vm_size               = "Standard_D8s_v5"
-  vnet_subnet_id        = azurerm_subnet.cluster_nodes.id
-  zones                 = ["1", "2", "3"]
+  vnet_subnet_id        = azurerm_subnet.cluster_nodes_workload[each.key].id
+  zones                 = [each.key]
 }

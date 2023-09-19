@@ -6,6 +6,9 @@ variable "subscription_id" {
   type = string
 }
 
+variable "environment" {
+  type = string
+}
 variable "wan_tenant_id" {
   type = string
 }
@@ -31,15 +34,6 @@ variable "state_storage_account_name" {
 }
 
 variable "state_container_name" {
-  type = string
-}
-
-variable "state_key_wan" {
-  type    = string
-  default = "wan.tfstate"
-}
-
-variable "location" {
   type = string
 }
 

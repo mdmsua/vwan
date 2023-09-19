@@ -26,12 +26,15 @@ variable "state_container_name" {
   type = string
 }
 
-variable "state_key_hub" {
-  type    = string
-  default = "hub.tfstate"
+variable "address_space" {
+  type = list(string)
 }
 
-variable "address_space" {
+variable "environment" {
+  type = string
+}
+
+variable "hub" {
   type = string
 }
 
@@ -50,5 +53,5 @@ variable "cilium_version" {
 
 variable "gateway_api_version" {
   type    = string
-  default = "v0.7.0"
+  default = "v0.8.0"
 }

@@ -6,7 +6,7 @@ terraform {
     }
   }
   backend "azurerm" {
-    key              = "wan.tfstate"
+    key              = "wan"
     use_azuread_auth = true
   }
 }

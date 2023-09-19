@@ -6,7 +6,7 @@ terraform {
     }
   }
   backend "azurerm" {
-    key              = "hub.tfstate"
+    key              = "hub"
     use_azuread_auth = true
   }
 }

@@ -18,7 +18,7 @@ terraform {
     }
   }
   backend "azurerm" {
-    key              = "spoke.tfstate"
+    key              = "spoke"
     use_azuread_auth = true
   }
 }
